@@ -1,27 +1,40 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <stdint.h> // Include the standard integer types
+#include <stdint.h> // Include this header for uint16_t
 
-// WiFi configuration
+// WiFi credentials
 extern const char *ssid;
 extern const char *password;
+
+// Server settings
 extern const char *host;
 extern const uint16_t portNum;
 
-// Define communication methods
-#define COMM_METHOD_SERIAL 0
-#define COMM_METHOD_UDP 1
-#define COMM_METHOD_TCP 2
+// UWB settings
+extern bool UWB_PRECALIBRATION;
+extern int DEVICE_TYPE;
+extern unsigned long updateInterval;
 
-// Set the communication method
-#define COMM_METHOD COMM_METHOD_UDP // Change to COMM_METHOD_SERIAL or COMM_METHOD_TCP as needed
+// UWB antenna delay parameters
+extern float tADTX;
+extern float tADRX;
 
-// Define device type
-#define IS_TAG 1
-#define IS_ANCHOR 0
+// Define tag and anchor addresses
+extern char tag_addr[];
+extern char anchor_addr[];
 
-// Set the device type
-#define DEVICE_TYPE IS_TAG // Change to IS_ANCHOR as needed
+// Calibration parameters
+extern bool IMU_CALIBRATED;
+extern float Ta[3][3];
+extern float Ka[3][3];
+extern float acce_bias[3];
+extern float Tg[3][3];
+extern float Kg[3][3];
+extern float gyro_bias[3];
+
+// Distances
+extern float actual_distance;
+extern float initial_measured_distance;
 
 #endif // CONFIG_H

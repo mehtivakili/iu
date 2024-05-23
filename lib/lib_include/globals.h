@@ -3,9 +3,11 @@
 
 #include "link.h"
 
-// #ifdef IS_TAG
-extern MyLink *uwb_data;
-// #endif
+#if DEVICE_TYPE == IS_TAG
+extern unsigned long lastUpdateTime;
+extern unsigned long updateInterval; // Ensure consistent type
+extern MyLink *uwb_data; // Declare uwb_data as extern
+#endif
 
 // Define USB_Packet
 struct DPL {
