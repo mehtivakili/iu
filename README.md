@@ -48,7 +48,7 @@ This project aims to achieve indoor localization with ESP32 UWB modules. It supp
 1. Clone the repository:
 
     ```sh
-    git clone [https://github.com/mehtivakili/iu.git]
+    [git clone (https://github.com/mehtivakili/iu.git)]
     cd iu
     ```
 
