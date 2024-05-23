@@ -48,8 +48,8 @@ This project aims to achieve indoor localization with ESP32 UWB modules. It supp
 1. Clone the repository:
 
     ```sh
-    git clone https://github.com/yourusername/esp32-uwb-localization.git
-    cd esp32-uwb-localization
+    git clone [https://github.com/mehtivakili/iu.git]
+    cd iu
     ```
 
 2. Install PlatformIO IDE:
