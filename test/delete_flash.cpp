@@ -79,7 +79,6 @@ const char* plotPage = R"rawliteral(
       <div class="stats">
         <div id="avgRate">Avg Rate from Beginning: 0</div>
         <div id="dataPerSecond">Data per Second now: 0</div>
-        <div id="leastDataPerSec"  style="color: red;" >Least Data per Second: 0</div>
       </div>
     </div>   
     <table class="data-table" id="dataTable">
@@ -120,44 +119,23 @@ let lastSecondTimestamp = null;
     document.getElementById('samplesPerSec').addEventListener('change', function() {
         samplesPerSec = parseInt(this.value);
     });
-  
-  let lastAvgRate = 0;  // To store the last Avg Rate value
-let leastDataPerSecondValue = 20; // Initialize with a minimum value of 20
-
-function updateStatistics() {
+    function updateStatistics() {
   const avgRateElement = document.getElementById('avgRate');
   const dataPerSecondElement = document.getElementById('dataPerSecond');
-  const leastDataPerSecElement = document.getElementById('leastDataPerSec');
 
   if (totalDataCount > 0 && startTime) {
     const currentTime = new Date().getTime();
     const elapsedTimeInSeconds = (currentTime - startTime) / 1000;
 
     // Update average rate
-    let avgRate = totalDataCount / elapsedTimeInSeconds;
-
-    // Reset Avg Rate if it exceeds 90
-    if (avgRate > 90) {
-      avgRate = lastAvgRate;
-    } else {
-      lastAvgRate = avgRate;
-    }
-
+    const avgRate = totalDataCount / elapsedTimeInSeconds;
     avgRateElement.textContent = `Avg Rate: ${avgRate.toFixed(2)}`;
 
     // Update data per second
     if (lastSecondTimestamp) {
       const timeSinceLastSecond = (currentTime - lastSecondTimestamp) / 1000;
       if (timeSinceLastSecond >= 1) {
-        const currentDataPerSecond = lastSecondDataCount;
-        dataPerSecondElement.textContent = `Data per Second: ${currentDataPerSecond}`;
-        
-        // Update leastDataPerSecond
-        if (currentDataPerSecond < leastDataPerSecondValue && currentDataPerSecond >= 20) {
-          leastDataPerSecondValue = currentDataPerSecond;
-        }
-        leastDataPerSecElement.textContent = `Least Data per Second: ${leastDataPerSecondValue}`;
-
+        dataPerSecondElement.textContent = `Data per Second: ${lastSecondDataCount}`;
         lastSecondDataCount = 0;
         lastSecondTimestamp = currentTime;
       }
@@ -166,7 +144,6 @@ function updateStatistics() {
     }
   }
 }
-
 
   // Global variables for plot data
         let accPlotData = {
@@ -215,20 +192,24 @@ document.addEventListener("DOMContentLoaded", function() {
   const calibrationParams = document.getElementById('calibrationParams');
   const calibrationCheckbox = document.getElementById('calibrationCheckbox');
 
-  // Initialize WebSocket and wait for connection to open
-  initializeWebSocket(function() {
-    const isCalibrated = calibrationCheckbox.checked;
-    toggleCalibrationParams(isCalibrated);
-    sendCalibrationState(isCalibrated); // Initial state sent to ESP32
-
-    // Add the event listener for the checkbox
-    calibrationCheckbox.addEventListener('change', function() {
+  // Check the initial state of the checkbox and send the calibration state
+  const isCalibrated = calibrationCheckbox.checked;
+     document.getElementById('calibrationCheckbox').addEventListener('change', function() {
       const isChecked = this.checked;
-      toggleCalibrationParams(isChecked);
-      sendCalibrationState(isChecked); // Send updated state to ESP32
+      document.getElementById('calibrationParams').classList.toggle('hidden', !isChecked);
+          ws.send(JSON.stringify({ action: 'start', calibrated: isCalibrated }));
     });
-  });
+  toggleCalibrationParams(isCalibrated);
+  // sendCalibrationState(isCalibrated);
 
+  // Add the event listener for the checkbox
+  // calibrationCheckbox.addEventListener('change', function() {
+  //   const isChecked = calibrationCheckbox.checked;
+  //   toggleCalibrationParams(isChecked);
+  //   sendCalibrationState(isChecked);
+  // });
+
+  initializeWebSocket();
   initPlots();
 });
 
@@ -242,23 +223,21 @@ function toggleCalibrationParams(isChecked) {
 }
 
 function sendCalibrationState(isCalibrated) {
-  // This function sends the calibration state to the ESP32 server
-  ws.send(JSON.stringify({ action: 'setCalibrationState', calibrated: isCalibrated }));
+  fetch('/setCalibrationState', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isCalibrated: isCalibrated })
+  }).then(response => {
+    if (!response.ok) {
+      console.error('Failed to set calibration state');
+    }
+  }).catch(error => {
+    console.error('Error setting calibration state:', error);
+  });
+}
 
-  // fetch('/setCalibrationState', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ calibrated: isCalibrated })
-  // }).then(response => {
-  //   if (!response.ok) {
-  //     console.error('Failed to set calibration state');
-  //   }
-  // }).catch(error => {
-  //   console.error('Error setting calibration state:', error);
-  // });
 
-}// Update plots with new data
-
+// Update plots with new data
 const MAX_SAMPLES = 50;
 
 
@@ -476,88 +455,98 @@ function downloadData() {
   document.body.removeChild(gyroLink);
 }
 
-// WebSocket initialization and message handling
-function initializeWebSocket(callback) {
-  console.log("Initializing WebSocket connection...");
-  ws = new WebSocket(`ws://${location.hostname}:81/ws`);
+    function initializeWebSocket() {
+      console.log("Initializing WebSocket connection...");
+      ws = new WebSocket(`ws://${location.hostname}:81/ws`);
 
-  ws.onopen = function() {
-    console.log("WebSocket connection established");
-    if (callback) {
-      callback();
-    }
-  };
+      ws.onopen = function() {
+        console.log("WebSocket connection established");
+      };
 let lastUpdateTime = 0;
-  ws.onmessage = function(event) {
+ws.onmessage = function(event) {
     const reader = new FileReader();
     reader.onload = function() {
-      const arrayBuffer = reader.result;
-      const dataView = new DataView(arrayBuffer);
-      
-      // Decode the time (float64)
-      const time = dataView.getFloat64(0, true);
+        const arrayBuffer = reader.result;
+        const dataView = new DataView(arrayBuffer);
+        
+        // Decode the time (float64)
+        // const time = dataView.getFloat64(0, true);
+        
+        // // Decode accel data (int16)
+        // const accelX = dataView.getInt16(8, true);
+        // const accelY = dataView.getInt16(10, true);
+        // const accelZ = dataView.getInt16(12, true);
+        
+        // // Decode gyro data (int16)
+        // const gyroX = dataView.getInt16(14, true);
+        // const gyroY = dataView.getInt16(16, true);
+        // const gyroZ = dataView.getInt16(18, true);
+        const acc = [];
+        for (let i = 0; i < 3; i++) {
+            acc.push(dataView.getFloat32(8 + i * 4, true)); // Assuming little-endian
+        }
 
-      // Decode accel data (float32)
-      const acc = [];
-      for (let i = 0; i < 3; i++) {
-        acc.push(parseFloat(dataView.getFloat32(8 + i * 4, true).toFixed(3)));
-      }
+        // Decode the float array (3 floats, each 4 bytes)
+        const gyro = [];
+        for (let i = 0; i < 3; i++) {
+            gyro.push(dataView.getFloat32(20 + i * 4, true)); // Assuming little-endian
+        }
+               // Get the current time
+        const currentTime = new Date().getTime();
 
-      // Decode gyro data (float32)
-      const gyro = [];
-      for (let i = 0; i < 3; i++) {
-        gyro.push(parseFloat(dataView.getFloat32(20 + i * 4, true).toFixed(3)));
-      }
+        // Set the start time if it's not already set
+        if (!startTime) {
+            startTime = currentTime;
+        }
 
-      // console.log(acc);
-      // console.log(gyro);
+        // Calculate the elapsed time in seconds
+        const elapsedTime = (currentTime - startTime) / 1000;
 
-      // Get the current time
-      const currentTime = new Date().getTime();
-
-      // Set the start time if it's not already set
-      if (!startTime) {
-        startTime = currentTime;
-      }
-
-      // Calculate the elapsed time in seconds
-      const elapsedTime = (currentTime - startTime) / 1000;
-
-      formattedTime = elapsedTime.toFixed(4);
-      eTime = formattedTime;
-      const newRow = document.createElement('tr');
-      newRow.innerHTML = `<td>${formattedTime}</td><td>${acc[0]}</td><td>${acc[1]}</td><td>${acc[2]}</td><td>${gyro[0]}</td><td>${gyro[1]}</td><td>${gyro[2]}</td>`;
-      
+        formattedTime = elapsedTime.toFixed(3);
+        eTime = formattedTime;
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `<td>${formattedTime}</td><td>${acc[0]}</td><td>${acc[1]}</td><td>${acc[2]}</td><td>${gyro[0]}</td><td>${gyro[1]}</td><td>${gyro[2]}</td>`;
       totalDataCount++;
       lastSecondDataCount++;
 
       updateStatistics();
-      const dataBody = document.getElementById('dataBody');
-      dataBody.insertBefore(newRow, dataBody.firstChild);
+        const dataBody = document.getElementById('dataBody');
+        dataBody.insertBefore(newRow, dataBody.firstChild);
 
-      // Collect data for download
-      collectedData.push([formattedTime, acc[0], acc[1], acc[2], gyro[0], gyro[1], gyro[2]]);
+        // Collect data for download
+        collectedData.push([formattedTime, acc[0], acc[1], acc[2], gyro[0], gyro[1], gyro[2]]);
 
-      if (dataBody.rows.length > 20) {
-        dataBody.deleteRow(20);
-      }
-      
-      if (elapsedTime - lastUpdateTime >= 1 / samplesPerSec) {
-        lastUpdateTime = elapsedTime;
-        updatePlots(formattedTime, acc, gyro);
-      }
+        if (dataBody.rows.length > 20) {
+            dataBody.deleteRow(20);
+        }
+        accel = acc;
+        const data = {
+            time: formattedTime,
+            accel: [acc[0], acc[1], acc[2]],
+            gyro: [gyro[0], gyro[1], gyro[2]]
+        };
+    // Update the plots with new data
+ if (elapsedTime - lastUpdateTime >= 1 / samplesPerSec) {
+            lastUpdateTime = elapsedTime;
+            updatePlots(formattedTime, accel, gyro);
+
+       // updatePlots(data);
+    };
+            // updatePlots(data);
     };
     reader.readAsArrayBuffer(event.data);
-  };
+};
 
-  ws.onerror = function(error) {
-    console.log("WebSocket error:", error); // Debug log for WebSocket errors
-  };
 
-  ws.onclose = function() {
-    console.log("WebSocket connection closed");
-  };
-}
+
+      ws.onerror = function(error) {
+        console.log("WebSocket error:", error); // Debug log for WebSocket errors
+      };
+
+      ws.onclose = function() {
+        console.log("WebSocket connection closed");
+      };
+    }
   </script>
 </body>
 </html>
@@ -570,7 +559,8 @@ let lastUpdateTime = 0;
 #include <ArduinoOTA.h>
 #include "BMI088.h"
 #include "config2.h"
-
+#include "esp_system.h"
+#include "nvs_flash.h"
 bool useCalibratedData = false;
 
 NetworkConsole networkConsole;
@@ -613,18 +603,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     Serial.printf("[%u] Connected from %s\n", num, ip.toString().c_str());
   } else if (type == WStype_TEXT) {
     Serial.printf("[%u] Received Text: %s\n", num, payload);
-    // using websocket for state change 
-        StaticJsonDocument<256> doc;
-    DeserializationError error = deserializeJson(doc, payload);
-    if (error) {
-      Serial.printf("Failed to parse JSON: %s\n", error.c_str());
-      return;
-    }
-    const char* action = doc["action"];
-    if (strcmp(action, "setCalibrationState") == 0) {
-      useCalibratedData = doc["calibrated"];
-      Serial.printf("Calibration state updated: %s\n", useCalibratedData ? "true" : "false");
-    }
   } else if (type == WStype_BIN) {
     Serial.printf("[%u] Received Binary\n", num);
   } else if(type == WStype_PONG) {
@@ -648,37 +626,11 @@ void handleSetCalibrationState() {
     return;
   }
   
-  // Check if the JSON object contains the "calibrated" key
-  if (doc.containsKey("calibrated")) {
-    // useCalibratedData = doc["calibrated"];
-    wifiManager.getServer().send(200, "text/plain", "Calibration state updated");
-  } else {
-    wifiManager.getServer().send(400, "text/plain", "Key 'calibrated' not found in JSON");
-  }
+  useCalibratedData = doc["calibrated"];
+  wifiManager.getServer().send(200, "text/plain", "Calibration state updated");
 }
 
-
 void sendIMUData() {
-    if (useCalibratedData){
-    acce_calibrated[0] = ((int)(((Ka[0][0] * Ta[0][0]) + (Ka[0][1] * Ta[1][1]) + (Ka[0][2] * Ta[2][2])) * (accelX_raw - acce_bias[0]) * 1000)) / 1000.0;
-    acce_calibrated[1] = ((int)(((Ka[1][1] * Ta[1][1]) + (Ka[1][2] * Ta[2][2])) * (accelY_raw - acce_bias[1]) * 1000)) / 1000.0;
-    acce_calibrated[2] = ((int)(((Ka[2][2] * Ta[2][2])) * (accelZ_raw - acce_bias[2]) * 1000)) / 1000.0;
-
-    gyro_calibrated[0] = ((int)(((Kg[0][0] * Tg[0][0]) + (Kg[0][1] * Tg[1][1]) + (Kg[0][2] * Tg[2][2])) * (gyroX_raw - gyro_bias[0]) * 1000)) / 1000.0;
-    gyro_calibrated[1] = ((int)(((Kg[1][0] * Tg[1][0]) + (Kg[1][1] * Tg[1][1]) + (Kg[1][2] * Tg[2][2])) * (gyroY_raw - gyro_bias[1]) * 1000)) / 1000.0;
-    gyro_calibrated[2] = ((int)(((Kg[2][0] * Tg[2][0]) + (Kg[2][1] * Tg[2][1]) + (Kg[2][2] * Tg[2][2])) * (gyroZ_raw - gyro_bias[2]) * 1000)) / 1000.0;
-    
-    // Serial.print(acce_calibrated[0]);
-
-  }else{
-    acce_calibrated[0] = accelX_raw;
-    acce_calibrated[1] = accelY_raw;
-    acce_calibrated[2] = accelZ_raw;
-    gyro_calibrated[0] = gyroX_raw;
-    gyro_calibrated[1] = gyroY_raw;
-    gyro_calibrated[2] = gyroZ_raw;
-  }
-
   uint8_t buffer[32]; // 8 bytes for double + 3*4 bytes for each float array (accel and gyro)
 
   // Ensure data fits in the buffer
@@ -751,6 +703,24 @@ void handleUpdateConfig() {
 
 void setup() {
   Serial.begin(115200);
+        // // Initialize the NVS (Non-Volatile Storage) flash
+        // esp_err_t err = nvs_flash_init();
+        
+        // // If NVS is already initialized, err will be ESP_ERR_NVS_NO_FREE_PAGES or ESP_ERR_NVS_NEW_VERSION_FOUND
+        // if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        //     // Erase the NVS flash memory
+        //     ESP_ERROR_CHECK(nvs_flash_erase());
+        //     // Initialize the NVS flash again
+        //     err = nvs_flash_init();
+        // }
+
+        // // Check if there were any errors
+        // if (err == ESP_OK) {
+        //     Serial.println("NVS flash memory reset successfully.");
+        // } else {
+        //     Serial.print("Error resetting NVS flash memory: ");
+        //     Serial.println(esp_err_to_name(err));
+        // }
 
   wifiManager.begin();
   networkConsole.begin();
@@ -804,7 +774,24 @@ void loop() {
   accel.getSensorRawValues(&accelX_raw, &accelY_raw, &accelZ_raw);
   gyro.getSensorRawValues(&gyroX_raw, &gyroY_raw, &gyroZ_raw);
 
+  if (useCalibratedData){
+    acce_calibrated[0] = ((int)(((Ka[0][0] * Ta[0][0]) + (Ka[0][1] * Ta[1][1]) + (Ka[0][2] * Ta[2][2])) * (accelX_raw - acce_bias[0]) * 1000)) / 1000.0;
+    acce_calibrated[1] = ((int)(((Ka[1][1] * Ta[1][1]) + (Ka[1][2] * Ta[2][2])) * (accelY_raw - acce_bias[1]) * 1000)) / 1000.0;
+    acce_calibrated[2] = ((int)(((Ka[2][2] * Ta[2][2])) * (accelZ_raw - acce_bias[2]) * 1000)) / 1000.0;
 
+    gyro_calibrated[0] = ((int)(((Kg[0][0] * Tg[0][0]) + (Kg[0][1] * Tg[1][1]) + (Kg[0][2] * Tg[2][2])) * (gyroX_raw - gyro_bias[0]) * 1000)) / 1000.0;
+    gyro_calibrated[1] = ((int)(((Kg[1][0] * Tg[1][0]) + (Kg[1][1] * Tg[1][1]) + (Kg[1][2] * Tg[2][2])) * (gyroY_raw - gyro_bias[1]) * 1000)) / 1000.0;
+    gyro_calibrated[2] = ((int)(((Kg[2][0] * Tg[2][0]) + (Kg[2][1] * Tg[2][1]) + (Kg[2][2] * Tg[2][2])) * (gyroZ_raw - gyro_bias[2]) * 1000)) / 1000.0;
+
+
+  }else{
+    acce_calibrated[0] = accelX_raw;
+    acce_calibrated[1] = accelY_raw;
+    acce_calibrated[2] = accelZ_raw;
+    gyro_calibrated[0] = gyroX_raw;
+    gyro_calibrated[1] = gyroY_raw;
+    gyro_calibrated[2] = gyroZ_raw;
+  }
 
 
   Tio += 0.005;
