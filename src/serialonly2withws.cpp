@@ -700,6 +700,13 @@ float gyro_calibrated[3];
 
 double Tio = 0.0;
 
+double myArray[7];
+typedef union {
+  float floatingPoint;
+  byte binary[4];
+} binaryFloat;
+
+
 float Ta[3][3] = {{1, -0.00546066, 0.00101399}, {0, 1, 0.00141895}, {0, 0, 1}};
 float Ka[3][3] = {{0.00358347, 0, 0}, {0, 0.00358133, 0}, {0, 0, 0.00359205}};
 float Tg[3][3] = {{1, -0.00614889, -0.000546488}, {0.0102258, 1, 0.000838491}, {0.00412113, 0.0020154, 1}};
@@ -834,15 +841,16 @@ void sendIMUData() {
     gyro_calibrated[1] = gyroY_raw;
     gyro_calibrated[2] = gyroZ_raw;
   }
-
-    uint8_t buffer[36]; // 8 bytes for double + 3*4 bytes for each float array (accel and gyro) + 4 bytes for CRC
+  float tio_millis =static_cast<float>(millis());
+  Tio = tio_millis/1000.0;
+    uint8_t buffer[32]; // 8 bytes for double + 3*4 bytes for each float array (accel and gyro) + 4 bytes for CRC
   
   // Ensure data fits in the buffer
   static_assert(sizeof(Tio) == 8, "Size of double is not 8 bytes");
   static_assert(sizeof(acce_calibrated) == 12, "Size of accel data is not 12 bytes");
   static_assert(sizeof(gyro_calibrated) == 12, "Size of gyro data is not 12 bytes");
 
-  // Pack data into buffer
+  // // Pack data into buffer
   memcpy(buffer, &Tio, sizeof(Tio));
   memcpy(buffer + 8, acce_calibrated, sizeof(acce_calibrated));
   memcpy(buffer + 20, gyro_calibrated, sizeof(gyro_calibrated));
@@ -857,25 +865,44 @@ void sendIMUData() {
   // memcpy(decodedGyro, buffer + 20, sizeof(decodedGyro));
 
     // Calculate CRC32 and append to the buffer
-    CRC32 crc;
-    crc.update(buffer, 32);
-    uint32_t crcValue = crc.finalize();
-    memcpy(buffer + 32, &crcValue, sizeof(crcValue));
+    // CRC32 crc;
+    // crc.update(buffer, 32);
+    // uint32_t crcValue = crc.finalize();
+    // memcpy(buffer + 32, &crcValue, sizeof(crcValue));
+
+  myArray[0] = Tio;
+  myArray[1] = acce_calibrated[0];
+  myArray[2] = acce_calibrated[1];
+  myArray[3] = acce_calibrated[2];
+  myArray[4] = gyro_calibrated[0];
+  myArray[5] = gyro_calibrated[1];
+  myArray[6] = gyro_calibrated[2];
+
+   size_t size = sizeof(myArray);
+
+  char check = 'c';
+  Serial.write(check);
+
+  for(int i = 0; i < 7 ; i++){
+    binaryFloat hi;
+    hi.floatingPoint = myArray[i];
+    Serial.write(hi.binary,4);
+  }
 
     // Send the buffer over serial
-    Serial.write(buffer, sizeof(buffer));
+    // Serial.write(buffer, sizeof(buffer));
 
   // Send the data
   bool result = webSocket.broadcastBIN(buffer, sizeof(buffer));
-  if (result) {
-    // Serial.println("Data sent successfully");
-    if(count_to_restart =! 0){
-      count_to_restart -= 1;
-    }
-  } else {
-    Serial.println("Failed to send data");
-    count_to_restart++;
-  }
+  // if (result) {
+  //   // Serial.println("Data sent successfully");
+  //   if(count_to_restart =! 0){
+  //     count_to_restart -= 1;
+  //   }
+  // } else {
+  //   Serial.println("Failed to send data");
+  //   count_to_restart++;
+  // }
   if (count_to_restart>15)
   {
     ESP.restart();
@@ -994,8 +1021,8 @@ void loop() {
 
 
 
-  Tio += 0.005;
+  // Tio += 0.005;
 
   sendIMUData();
-  delay(5);  // Adjust the delay to control the data sending rate
+  delay(2);  // Adjust the delay to control the data sending rate
 }

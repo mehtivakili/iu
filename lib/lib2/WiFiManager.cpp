@@ -191,11 +191,16 @@ void WiFiManager::handleSetWiFi() {
     Serial.print("Received Password: ");
     Serial.println(password);
 
+    // Set custom hostname
+    WiFi.setHostname("Arastronaut");
+    
     WiFi.begin(ssid.c_str(), password.c_str());
     Serial.print("Connecting to ");
     Serial.println(ssid);
     for (int i = 0; i < 10; i++) {
       if (WiFi.status() == WL_CONNECTED) {
+            // Set custom hostname
+             WiFi.setHostname("Arastronaut");  
         Serial.println("Connected to WiFi");
 
         // Save credentials to preferences
